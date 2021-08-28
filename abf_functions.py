@@ -2,6 +2,13 @@ import tensorflow as tf
 import numpy as np
 from functools import partial
 
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+from scipy.stats import binom
+from sklearn.calibration import calibration_curve
+from sklearn.metrics import r2_score, confusion_matrix
+
 
 def kl_latent_space(z, log_det_J):
     """ Computes the Kullback-Leibler divergence (Maximum Likelihood Loss) between true and approximate
@@ -101,3 +108,91 @@ def mahalanobis_distance_2D_1D(data, ref, cov):
     n = data.shape[0]
     mahalanobis_distances = [scipy.spatial.distance.mahalanobis(data[i], ref, cov) for i in range(n)]
     return np.array(mahalanobis_distances)
+
+
+
+####
+
+def true_vs_estimated(theta_true, theta_est, param_names, dpi=300,
+                      figsize=(20, 4), show=True, filename=None, font_size=12):
+    """ Plots a scatter plot with abline of the estimated posterior means vs true values.
+    Parameters
+    ----------
+    theta_true: np.array
+        Array of true parameters.
+    theta_est: np.array
+        Array of estimated parameters.
+    param_names: list(str)
+        List of parameter names for plotting.
+    dpi: int, default:300
+        Dots per inch (dpi) for the plot.
+    figsize: tuple(int, int), default: (20,4)
+        Figure size.
+    show: boolean, default: True
+        Controls if the plot will be shown
+    filename: str, default: None
+        Filename if plot shall be saved
+    font_size: int, default: 12
+        Font size
+    """
+
+
+    # Plot settings
+    plt.rcParams['font.size'] = font_size
+
+    # Determine n_subplots dynamically
+    n_row = int(np.ceil(len(param_names) / 6))
+    n_col = int(np.ceil(len(param_names) / n_row))
+
+    # Initialize figure
+    f, axarr = plt.subplots(n_row, n_col, figsize=figsize)
+    if n_row > 1:
+        axarr = axarr.flat
+        
+    # --- Plot true vs estimated posterior means on a single row --- #
+    for j in range(len(param_names)):
+        
+        # Plot analytic vs estimated
+        axarr[j].scatter(theta_est[:, j], theta_true[:, j], color='black', alpha=0.4)
+        
+        # get axis limits and set equal x and y limits
+        lower_lim = min(axarr[j].get_xlim()[0], axarr[j].get_ylim()[0])
+        upper_lim = max(axarr[j].get_xlim()[1], axarr[j].get_ylim()[1])
+        axarr[j].set_xlim((lower_lim, upper_lim))
+        axarr[j].set_ylim((lower_lim, upper_lim))
+        axarr[j].plot(axarr[j].get_xlim(), axarr[j].get_xlim(), '--', color='black')
+        
+        # Compute NRMSE
+        rmse = np.sqrt(np.mean( (theta_est[:, j] - theta_true[:, j])**2 ))
+        nrmse = rmse / (theta_true[:, j].max() - theta_true[:, j].min())
+        axarr[j].text(0.1, 0.9, 'NRMSE={:.3f}'.format(nrmse),
+                     horizontalalignment='left',
+                     verticalalignment='center',
+                     transform=axarr[j].transAxes,
+                     size=10)
+        
+        # Compute R2
+        #r2 = r2_score(theta_true[:, j], theta_est[:, j])
+        #axarr[j].text(0.1, 0.8, '$R^2$={:.3f}'.format(r2),
+        #             horizontalalignment='left',
+        #             verticalalignment='center',
+        #             transform=axarr[j].transAxes, 
+        #             size=10)
+        
+        if j == 0:
+            # Label plot
+            axarr[j].set_xlabel('Estimated')
+            axarr[j].set_ylabel('True')
+        axarr[j].set_title(param_names[j])
+        axarr[j].spines['right'].set_visible(False)
+        axarr[j].spines['top'].set_visible(False)
+    
+    # Adjust spaces
+    f.tight_layout()
+
+    if filename is not None:
+        f.savefig(filename)
+        
+        
+    if show:
+        plt.show()
